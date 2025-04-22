@@ -85,7 +85,26 @@ var BeaconDetector = {
      */
     debugBeaconScanner: function(successCallback, errorCallback) {
         exec(successCallback, errorCallback, 'BeaconDetector', 'debugBeaconScanner', []);
-    }
+    },
+    
+    /**
+     * Set callback for permission events
+     * @param {Function} callback - Callback function that receives permission events
+     */
+    onPermissionEvent: function(callback) {
+        exec(callback, function(error) {
+            console.error('Error en el callback de eventos de permisos: ' + error);
+        }, 'BeaconDetector', 'onPermissionEvent', []);
+    },
+    
+    /**
+     * Request necessary permissions
+     * @param {Function} successCallback - Success callback
+     * @param {Function} errorCallback - Error callback
+     */
+    requestPermissions: function(successCallback, errorCallback) {
+        exec(successCallback, errorCallback, 'BeaconDetector', 'requestPermissions', []);
+    },
 };
 
 module.exports = BeaconDetector;
