@@ -8,6 +8,7 @@ if (typeof cordova !== 'undefined') {
     document.addEventListener('deviceready', function() {
         $actions.UpdateFeedbackMessage("Dispositivo listo, verificando disponibilidad del plugin...");
         
+        // Verifica que BeaconDetectorPlugin esté disponible después de que BeaconDetectorInit.js lo haya inicializado
         setTimeout(function() {
             if (window.BeaconDetectorPlugin) {
                 $actions.UpdateFeedbackMessage("Plugin detectado, verificando compatibilidad...");
@@ -15,22 +16,12 @@ if (typeof cordova !== 'undefined') {
                 // Verificar compatibilidad del dispositivo primero
                 BeaconDetectorPlugin.checkCompatibility()
                     .then(function(result) {
-                        if (!result.bluetoothPermissions) {
-                            $actions.UpdateFeedbackMessage("Se requieren permisos para acceder a dispositivos cercanos...");
-                            // Solicitar permisos específicamente para dispositivos cercanos
-                            return new Promise((resolve, reject) => {
-                                cordova.exec(resolve, reject, "BeaconDetector", "requestNearbyPermissions", []);
-                            });
-                        }
-                        return result;
-                    })
-                    .then(function(result) {
                         if (!result.isCompatible) {
                             throw new Error("El dispositivo no es compatible con la detección de beacons: " + 
-                                      (result.bluetoothSupport ? "" : "No soporta Bluetooth. ") +
-                                      (result.bluetoothEnabled ? "" : "Bluetooth desactivado. ") +
-                                      (result.locationPermissions ? "" : "Permisos de ubicación no concedidos. ") +
-                                      (result.bluetoothPermissions ? "" : "Permisos de Bluetooth no concedidos."));
+                                  (result.bluetoothSupport ? "" : "No soporta Bluetooth. ") +
+                                  (result.bluetoothEnabled ? "" : "Bluetooth desactivado. ") +
+                                  (result.locationPermissions ? "" : "Permisos de ubicación no concedidos. ") +
+                                  (result.bluetoothPermissions ? "" : "Permisos de Bluetooth no concedidos."));
                         }
                         
                         $actions.UpdateFeedbackMessage("Dispositivo compatible, preparando datos de beacons...");
@@ -110,14 +101,53 @@ if (typeof cordova !== 'undefined') {
                         }, 5000); // Verificar cada 5 segundos
                         
                         // Configura el callback de detección de beacons - SOLO SE CONFIGURA UNA VEZ
-                        BeaconDetectorPlugin.onBeaconDetected(function(beacon) {
-                            // Actualizar el mensaje con información del beacon
-                            var beaconMsg = "Beacon detectado: " + (beacon.title || "Desconocido") + 
-                                          " (UUID: " + beacon.uuid + 
-                                          ", Major: " + beacon.major + 
-                                          ", Minor: " + beacon.minor + ")";
-                            
-                            $actions.UpdateFeedbackMessage(beaconMsg);
+                        BeaconDetectorPlugin.onBeaconDetected(function(response) {
+                            if (response.type === "permission_request") {
+                                // Mostrar mensaje de solicitud de permisos en OutSystems
+                                var permissionsMsg = "Se requieren los siguientes permisos para detectar beacons:\n";
+                                response.permissions.forEach(function(permission) {
+                                    switch(permission) {
+                                        case "android.permission.BLUETOOTH_SCAN":
+                                            permissionsMsg += "- Permiso para escanear dispositivos cercanos\n";
+                                            break;
+                                        case "android.permission.BLUETOOTH_CONNECT":
+                                            permissionsMsg += "- Permiso para conectar con dispositivos cercanos\n";
+                                            break;
+                                        case "android.permission.ACCESS_FINE_LOCATION":
+                                            permissionsMsg += "- Permiso de ubicación precisa\n";
+                                            break;
+                                        default:
+                                            permissionsMsg += "- " + permission + "\n";
+                                    }
+                                });
+                                permissionsMsg += "\nPor favor, acepta los permisos para continuar.";
+                                $actions.UpdateFeedbackMessage(permissionsMsg);
+                            } 
+                            else if (response.type === "permission_result") {
+                                if (response.granted) {
+                                    $actions.UpdateFeedbackMessage("Permisos concedidos. Iniciando escaneo de beacons...");
+                                    // Reintentar el escaneo
+                                    BeaconDetectorPlugin.startScanning()
+                                        .then(function() {
+                                            $actions.UpdateFeedbackMessage("Escaneo de beacons iniciado correctamente.");
+                                        })
+                                        .catch(function(error) {
+                                            $actions.UpdateFeedbackMessage("Error al iniciar el escaneo: " + error);
+                                        });
+                                } else {
+                                    $actions.UpdateFeedbackMessage("No se concedieron todos los permisos necesarios. La detección de beacons no funcionará correctamente.");
+                                }
+                            }
+                            else {
+                                // Manejo normal de detección de beacons
+                                // Actualizar el mensaje con información del beacon
+                                var beaconMsg = "Beacon detectado: " + (beacon.title || "Desconocido") + 
+                                              " (UUID: " + beacon.uuid + 
+                                              ", Major: " + beacon.major + 
+                                              ", Minor: " + beacon.minor + ")";
+                                
+                                $actions.UpdateFeedbackMessage(beaconMsg);
+                            };
                         });
                     })
                     .catch(function(error) {
@@ -127,7 +157,7 @@ if (typeof cordova !== 'undefined') {
             } else {
                 $actions.UpdateFeedbackMessage("BeaconDetectorPlugin no está disponible. Asegúrate de que el plugin esté correctamente instalado.");
             }
-        }, 500);
+        }, 500); // Pequeño retraso para asegurar que BeaconDetectorInit.js haya terminado
     }, false);
 } else {
     $actions.UpdateFeedbackMessage("Cordova no está disponible. Esta acción solo funciona en dispositivos móviles.");

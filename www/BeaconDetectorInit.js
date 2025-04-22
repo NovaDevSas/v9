@@ -103,6 +103,23 @@ document.addEventListener('deviceready', function() {
             });
         },
         
+        // Agregar método para manejar eventos de permisos
+        onPermissionEvent: function(callback) {
+            return new Promise(function(resolve, reject) {
+                window.beaconDetector.onPermissionEvent(
+                    function(event) {
+                        console.log("Evento de permisos recibido:", event);
+                        callback(event);
+                        resolve(event);
+                    },
+                    function(error) {
+                        console.error("Error en evento de permisos:", error);
+                        reject(error);
+                    }
+                );
+            });
+        },
+        
         listDetectedBeacons: function() {
             return new Promise(function(resolve, reject) {
                 window.beaconDetector.listDetectedBeacons(resolve, reject);
@@ -190,7 +207,7 @@ document.addEventListener('deviceready', function() {
             };
         }
     };
-    
+
     console.log("BeaconDetectorPlugin interface initialized successfully");
     
     // Verificar compatibilidad automáticamente e iniciar escaneo continuo
@@ -198,6 +215,22 @@ document.addEventListener('deviceready', function() {
         .then(function(result) {
             console.log("Compatibilidad del dispositivo:", result);
             if (result.isCompatible) {
+                // Configurar el manejador de eventos de permisos
+                window.BeaconDetectorPlugin.onPermissionEvent(function(event) {
+                    if (event.type === "permission_request") {
+                        console.log("Se requieren permisos:", event.permissions);
+                        // El manejo específico de la solicitud de permisos se realiza en outsystems.js
+                    } else if (event.type === "permission_result") {
+                        console.log("Resultado de permisos:", event.granted ? "Concedidos" : "Denegados");
+                        if (event.granted) {
+                            // Reiniciar el escaneo si los permisos fueron concedidos
+                            window.BeaconDetectorPlugin.startScanning()
+                                .then(() => console.log("Escaneo reiniciado después de conceder permisos"))
+                                .catch(error => console.error("Error al reiniciar escaneo:", error));
+                        }
+                    }
+                });
+
                 // Iniciar escaneo continuo
                 window.continuousScanController = window.BeaconDetectorPlugin.continuousScanning({
                     interval: 15000, // 15 segundos entre escaneos

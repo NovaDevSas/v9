@@ -332,29 +332,94 @@ public class BeaconDetectorPlugin extends CordovaPlugin implements RangeNotifier
         }
     }
     
+    // Add the missing checkCompatibility method
     private void checkCompatibility(CallbackContext callbackContext) {
-        Activity activity = cordova.getActivity();
         try {
+            Activity activity = cordova.getActivity();
             JSONObject result = new JSONObject();
-            boolean bluetoothSupport = activity.getPackageManager().hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE);
-            boolean bluetoothEnabled = BeaconManager.getInstanceForApplication(activity).checkAvailability();
-            boolean locationPermissions = activity.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
-            boolean bluetoothPermissions = true;
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                bluetoothPermissions = activity.checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED &&
-                                     activity.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED;
-            }
-
-            result.put("isCompatible", bluetoothSupport && bluetoothEnabled && locationPermissions && bluetoothPermissions);
+            
+            // Check Bluetooth support
+            android.bluetooth.BluetoothAdapter bluetoothAdapter = android.bluetooth.BluetoothAdapter.getDefaultAdapter();
+            boolean bluetoothSupport = bluetoothAdapter != null;
+            boolean bluetoothEnabled = bluetoothSupport && bluetoothAdapter.isEnabled();
+            
             result.put("bluetoothSupport", bluetoothSupport);
             result.put("bluetoothEnabled", bluetoothEnabled);
-            result.put("locationPermissions", locationPermissions);
-            result.put("bluetoothPermissions", bluetoothPermissions);
-
+            
+            // Check location permissions
+            boolean hasLocationPermission = activity.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) 
+                == PackageManager.PERMISSION_GRANTED;
+            result.put("locationPermissions", hasLocationPermission);
+            
+            // Check Bluetooth permissions for Android 12+
+            boolean hasBluetoothPermissions = true;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                hasBluetoothPermissions = activity.checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) 
+                    == PackageManager.PERMISSION_GRANTED
+                    && activity.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) 
+                    == PackageManager.PERMISSION_GRANTED;
+            }
+            result.put("bluetoothPermissions", hasBluetoothPermissions);
+            
+            // Overall compatibility
+            boolean isCompatible = bluetoothSupport && bluetoothEnabled && hasLocationPermission && hasBluetoothPermissions;
+            result.put("isCompatible", isCompatible);
+            
             callbackContext.success(result);
         } catch (Exception e) {
+            Log.e(TAG, "Error checking compatibility", e);
             callbackContext.error("Error checking compatibility: " + e.getMessage());
+        }
+    }
+    
+    // Add the missing didRangeBeaconsInRegion method required by RangeNotifier interface
+    @Override
+    public void didRangeBeaconsInRegion(Collection<Beacon> beacons, Region region) {
+        if (beaconDetectionCallback != null) {
+            try {
+                JSONArray beaconArray = new JSONArray();
+                
+                for (Beacon beacon : beacons) {
+                    String uuid = beacon.getId1().toString();
+                    int major = beacon.getId2().toInt();
+                    int minor = beacon.getId3().toInt();
+                    
+                    JSONObject beaconObj = new JSONObject();
+                    beaconObj.put("uuid", uuid);
+                    beaconObj.put("major", major);
+                    beaconObj.put("minor", minor);
+                    beaconObj.put("distance", beacon.getDistance());
+                    beaconObj.put("rssi", beacon.getRssi());
+                    
+                    // Find matching beacon in our data
+                    for (Map<String, Object> data : beaconData) {
+                        if (uuid.equalsIgnoreCase((String) data.get("uuid")) &&
+                            major == (int) data.get("major") &&
+                            minor == (int) data.get("minor")) {
+                            
+                            beaconObj.put("title", data.get("title"));
+                            beaconObj.put("url", data.get("url"));
+                            break;
+                        }
+                    }
+                    
+                    beaconArray.put(beaconObj);
+                }
+                
+                // Solo enviar los datos sin redirección
+                PluginResult result = new PluginResult(PluginResult.Status.OK, beaconArray);
+                result.setKeepCallback(true); // Keep the callback for future beacon detections
+                beaconDetectionCallback.sendPluginResult(result);
+                
+                Log.d(TAG, "Detected " + beacons.size() + " beacons");
+            } catch (Exception e) {
+                Log.e(TAG, "Error processing beacon detection", e);
+                
+                // Send error back to JavaScript
+                PluginResult result = new PluginResult(PluginResult.Status.ERROR, "Error processing beacon detection: " + e.getMessage());
+                result.setKeepCallback(true);
+                beaconDetectionCallback.sendPluginResult(result);
+            }
         }
     }
     
@@ -374,7 +439,6 @@ public class BeaconDetectorPlugin extends CordovaPlugin implements RangeNotifier
         Log.d(TAG, "Region state changed to: " + (state == MonitorNotifier.INSIDE ? "INSIDE" : "OUTSIDE"));
     }
     
-    // Mover este método dentro de la clase
     private boolean checkAndRequestPermissions() {
         Activity activity = cordova.getActivity();
         List<String> permissionsNeeded = new ArrayList<>();
@@ -394,12 +458,60 @@ public class BeaconDetectorPlugin extends CordovaPlugin implements RangeNotifier
             }
         }
         
-        // Solicitar permisos si es necesario
+        // Si se necesitan permisos, solicitarlos y devolver false
         if (!permissionsNeeded.isEmpty()) {
+            // Enviar evento a JavaScript para mostrar mensaje en OutSystems
+            sendPermissionRequestEvent(permissionsNeeded);
+            // Solicitar permisos
             cordova.requestPermissions(this, 0, permissionsNeeded.toArray(new String[0]));
             return false;
         }
         
         return true;
+    }
+
+    private void sendPermissionRequestEvent(List<String> permissions) {
+        if (beaconDetectionCallback != null) {
+            try {
+                JSONObject eventData = new JSONObject();
+                eventData.put("type", "permission_request");
+                JSONArray permissionsArray = new JSONArray();
+                for (String permission : permissions) {
+                    permissionsArray.put(permission);
+                }
+                eventData.put("permissions", permissionsArray);
+                
+                PluginResult result = new PluginResult(PluginResult.Status.OK, eventData);
+                result.setKeepCallback(true);
+                beaconDetectionCallback.sendPluginResult(result);
+            } catch (Exception e) {
+                Log.e(TAG, "Error sending permission request event", e);
+            }
+        }
+    }
+
+    @Override
+    public void onRequestPermissionResult(int requestCode, String[] permissions, int[] grantResults) {
+        boolean allGranted = true;
+        for (int result : grantResults) {
+            if (result != PackageManager.PERMISSION_GRANTED) {
+                allGranted = false;
+                break;
+            }
+        }
+
+        JSONObject result = new JSONObject();
+        try {
+            result.put("type", "permission_result");
+            result.put("granted", allGranted);
+            
+            if (beaconDetectionCallback != null) {
+                PluginResult pluginResult = new PluginResult(PluginResult.Status.OK, result);
+                pluginResult.setKeepCallback(true);
+                beaconDetectionCallback.sendPluginResult(pluginResult);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error sending permission result", e);
+        }
     }
 }
