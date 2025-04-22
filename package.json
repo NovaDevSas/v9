@@ -1,0 +1,22 @@
+{
+  "name": "cordova-plugin-beacon-detector",
+  "version": "1.0.0",
+  "description": "Cordova plugin for detecting beacons and redirecting based on beacon data",
+  "cordova": {
+    "id": "cordova-plugin-beacon-detector",
+    "platforms": [
+      "android",
+      "ios"
+    ]
+  },
+  "keywords": [
+    "ecosystem:cordova",
+    "cordova-android",
+    "cordova-ios",
+    "beacon",
+    "ibeacon",
+    "bluetooth"
+  ],
+  "author": "",
+  "license": "MIT"
+}

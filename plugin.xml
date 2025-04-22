@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<plugin xmlns="http://apache.org/cordova/ns/plugins/1.0"
+        id="cordova-plugin-beacon-detector"
+        version="1.0.0">
+    <name>Beacon Detector</name>
+    <description>Cordova plugin for detecting beacons and redirecting based on beacon data</description>
+    <license>MIT</license>
+    <keywords>cordova,beacon,ibeacon,eddystone,bluetooth,ble</keywords>
+    
+    <js-module src="www/beaconDetector.js" name="BeaconDetector">
+        <clobbers target="beaconDetector" />
+    </js-module>
+    
+    <!-- Android Configuration -->
+    <platform name="android">
+        <config-file target="res/xml/config.xml" parent="/*">
+            <feature name="BeaconDetector">
+                <param name="android-package" value="com.example.BeaconDetectorPlugin" />
+            </feature>
+        </config-file>
+        
+        <config-file target="AndroidManifest.xml" parent="/manifest">
+            <uses-permission android:name="android.permission.BLUETOOTH" />
+            <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+            <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+            <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+            <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+            <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+        </config-file>
+        
+        <framework src="org.altbeacon:android-beacon-library:2.19.5" />
+        <source-file src="src/android/BeaconDetectorPlugin.java" target-dir="src/com/example" />
+    </platform>
+    
+    <!-- iOS Configuration -->
+    <platform name="ios">
+        <config-file target="config.xml" parent="/*">
+            <feature name="BeaconDetector">
+                <param name="ios-package" value="BeaconDetectorPlugin" />
+            </feature>
+        </config-file>
+        
+        <config-file target="*-Info.plist" parent="NSBluetoothAlwaysUsageDescription">
+            <string>This app needs Bluetooth access to detect beacons.</string>
+        </config-file>
+        
+        <config-file target="*-Info.plist" parent="NSLocationWhenInUseUsageDescription">
+            <string>This app needs location access to detect beacons.</string>
+        </config-file>
+        
+        <config-file target="*-Info.plist" parent="NSLocationAlwaysAndWhenInUseUsageDescription">
+            <string>This app needs location access to detect beacons.</string>
+        </config-file>
+        
+        <config-file target="*-Info.plist" parent="NSLocationAlwaysUsageDescription">
+            <string>This app needs location access to detect beacons.</string>
+        </config-file>
+        
+        <source-file src="src/ios/BeaconDetectorPlugin.swift" />
+        <dependency id="cordova-plugin-add-swift-support" version="2.0.2" />
+    </platform>
+</plugin>
