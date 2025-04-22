@@ -8,7 +8,6 @@ if (typeof cordova !== 'undefined') {
     document.addEventListener('deviceready', function() {
         $actions.UpdateFeedbackMessage("Dispositivo listo, verificando disponibilidad del plugin...");
         
-        // Verifica que BeaconDetectorPlugin esté disponible después de que BeaconDetectorInit.js lo haya inicializado
         setTimeout(function() {
             if (window.BeaconDetectorPlugin) {
                 $actions.UpdateFeedbackMessage("Plugin detectado, verificando compatibilidad...");
@@ -16,12 +15,22 @@ if (typeof cordova !== 'undefined') {
                 // Verificar compatibilidad del dispositivo primero
                 BeaconDetectorPlugin.checkCompatibility()
                     .then(function(result) {
+                        if (!result.bluetoothPermissions) {
+                            $actions.UpdateFeedbackMessage("Se requieren permisos para acceder a dispositivos cercanos...");
+                            // Solicitar permisos específicamente para dispositivos cercanos
+                            return new Promise((resolve, reject) => {
+                                cordova.exec(resolve, reject, "BeaconDetector", "requestNearbyPermissions", []);
+                            });
+                        }
+                        return result;
+                    })
+                    .then(function(result) {
                         if (!result.isCompatible) {
                             throw new Error("El dispositivo no es compatible con la detección de beacons: " + 
-                                  (result.bluetoothSupport ? "" : "No soporta Bluetooth. ") +
-                                  (result.bluetoothEnabled ? "" : "Bluetooth desactivado. ") +
-                                  (result.locationPermissions ? "" : "Permisos de ubicación no concedidos. ") +
-                                  (result.bluetoothPermissions ? "" : "Permisos de Bluetooth no concedidos."));
+                                      (result.bluetoothSupport ? "" : "No soporta Bluetooth. ") +
+                                      (result.bluetoothEnabled ? "" : "Bluetooth desactivado. ") +
+                                      (result.locationPermissions ? "" : "Permisos de ubicación no concedidos. ") +
+                                      (result.bluetoothPermissions ? "" : "Permisos de Bluetooth no concedidos."));
                         }
                         
                         $actions.UpdateFeedbackMessage("Dispositivo compatible, preparando datos de beacons...");
@@ -118,7 +127,7 @@ if (typeof cordova !== 'undefined') {
             } else {
                 $actions.UpdateFeedbackMessage("BeaconDetectorPlugin no está disponible. Asegúrate de que el plugin esté correctamente instalado.");
             }
-        }, 500); // Pequeño retraso para asegurar que BeaconDetectorInit.js haya terminado
+        }, 500);
     }, false);
 } else {
     $actions.UpdateFeedbackMessage("Cordova no está disponible. Esta acción solo funciona en dispositivos móviles.");
